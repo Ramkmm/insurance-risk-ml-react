@@ -8,3 +8,4 @@ pymongo
 pyjwt
 pwdlib[argon2]
 email-validator
+uvicorn
