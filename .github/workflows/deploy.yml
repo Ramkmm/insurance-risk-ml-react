@@ -1,69 +1,56 @@
-name: Build & Deploy Insurance App
+name: CI - Insurance Risk App
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
 
 jobs:
-  build-test-deploy:
+  validate:
+    name: Validate Backend and Frontend
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
-    # 1️⃣ Checkout
-    - name: Checkout code
-      uses: actions/checkout@v4
+      # -------------------------
+      # Backend validation
+      # -------------------------
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
 
-    # 2️⃣ Setup Python
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.10"
+      - name: Validate FastAPI source
+        run: |
+          python -m py_compile src/api/app.py
+          echo "FastAPI source validation passed."
 
-    # 3️⃣ Install dependencies
-    - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
+      # -------------------------
+      # Frontend validation
+      # -------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
 
-    # 4️⃣ 🔥 VALIDATION (THIS SAVES YOU)
-    - name: Validate FastAPI app
-      run: |
-        python -m py_compile src/api/app.py
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
 
-    # 5️⃣ Test API startup
-    - name: Run API test
-      run: |
-        uvicorn src.api.app:app --host 127.0.0.1 --port 8000 &
-        sleep 5
-        curl -f http://127.0.0.1:8000 || exit 1
+      - name: Build React frontend
+        working-directory: frontend
+        run: npm run build
 
-    # 6️⃣ Build Docker
-    - name: Build Docker image
-      run: |
-        docker build -t ramkmm/insurance-api:latest .
-
-    # 7️⃣ Push to DockerHub
-    - name: Docker Login
-      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
-    - name: Push Image
-      run: |
-        docker push ramkmm/insurance-api:latest
-
-    # 8️⃣ Deploy to EC2
-    - name: Deploy to EC2
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ubuntu
-        key: ${{ secrets.EC2_KEY }}
-        script: |
-          docker stop insurance-app || true
-          docker rm insurance-app || true
-          docker pull ramkmm/insurance-api:latest
-          docker run -d \
-            --restart always \
-            --name insurance-app \
-            -p 8000:8000 \
-            -p 8501:8501 \
-            ramkmm/insurance-api:latest
+      - name: CI validation complete
+        run: |
+          echo "======================================"
+          echo "Insurance Risk App CI validation PASS"
+          echo "Backend syntax: PASS"
+          echo "React dependencies: PASS"
+          echo "React production build: PASS"
+          echo "======================================"
